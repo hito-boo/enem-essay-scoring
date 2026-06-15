@@ -1,0 +1,29 @@
+{
+    "dataset_corpus": {
+        "link": "kamel-usp/aes_enem_dataset",
+        "name": "JBCS2025"
+    },
+    "tokenizer": "neuralmind/bert-base-portuguese-cased",
+
+    "transformers": {
+        "bert": "neuralmind/bert-base-portuguese-cased",
+        "body": "base",
+        "c1": "linear",
+        "c2": "linear",
+        "c3": "linear",
+        "c4": "linear",
+        "c5": "linear"
+    },
+
+    "optimizer": "adamw",
+    "loss_function": "mse",
+
+    "params": {
+        "seed": 21,
+        "batch_size": 8,
+        "epochs": 1,
+        "learning_rate": 2e-5,
+        "weight_decay": 0.1,
+        "drop_out": [0.1, 0.0, 0.0, 0.0, 0.0, 0.0]
+    }
+}
