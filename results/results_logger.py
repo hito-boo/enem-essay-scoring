@@ -1,6 +1,6 @@
 import os
 import pandas as pd
-# import mlflow
+import mlflow
 from datetime import datetime
 
 def flatten_config(config):
@@ -17,9 +17,16 @@ def flatten_config(config):
             flat_config[f"{key}_body"] = value[0]
             for i in range(1, 6):
                 flat_config[f"{key}_c{i}"] = value[i]
+        elif isinstance(value, list) and len(value) == 5:
+            for i in range(5):
+                flat_config[f"{key}_c{i+1}"] = value[i]
         else:
             flat_config[key] = value
-            
+
+    for section in ("early_stopping", "gradient_accumulation", "lr_scheduler"):
+        for key, value in config.get(section, {}).items():
+            flat_config[f"{section}_{key}"] = value
+
     return flat_config
 
 def save_to_csv(config, metrics_dict, filepath="results/experiments_log.csv"):
@@ -43,7 +50,6 @@ def save_to_csv(config, metrics_dict, filepath="results/experiments_log.csv"):
         
     print(f"\n[Results Logger] Results successfully saved in: {filepath}")
 
-'''
 def log_to_mlflow(config, metrics_dict, experiment_name="Enem-Essay-Scoring"):
     mlflow.set_experiment(experiment_name)
     
@@ -59,4 +65,3 @@ def log_to_mlflow(config, metrics_dict, experiment_name="Enem-Essay-Scoring"):
             mlflow.log_text(text_value, f"confusion_matrices/{key}.txt")
             
     print(f"[Logger] Experiment recorded in MLflow (Experiment: {experiment_name})")
-'''
