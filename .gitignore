@@ -1,2 +1,6 @@
+mlflow.db
 __pycache__
+/checkpoints
+/mlruns
+/results/training_history
 /venv
