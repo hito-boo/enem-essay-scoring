@@ -1,36 +1,58 @@
 import torch
 from scoring.metrics import calculate_enem_metrics
+from scoring.training_config import get_loss_weights, get_grad_accum_steps, build_early_stopping
+from scoring.losses import build_train_loss_functions, build_eval_loss_functions
+from results.training_history import TrainingHistory
 from tqdm import tqdm
 
-def train_one_epoch(model, loader, optmizer, loss_function, device):
+def train_one_epoch(model, loader, optmizer, loss_functions, device, loss_weights, grad_accum_steps=1, scheduler=None, scheduler_step_mode=None, history=None):
     model.train()
 
     epoch_loss = 0.0
     competences_loss = [0.0, 0.0, 0.0, 0.0, 0.0]
 
-    for batch in tqdm(loader, desc="Training", leave=False):
+    num_batches = len(loader)
+    optmizer.zero_grad()
+
+    window_loss_sum = 0.0
+    window_count = 0
+
+    for step, batch in enumerate(tqdm(loader, desc="Training", leave=False)):
         input_ids = batch["input_ids"].to(device)
         attention_mask = batch["attention_mask"].to(device)
         real_grades = batch["grades"][:, :5].float().to(device)
 
-        optmizer.zero_grad()
         preds = model(input_ids, attention_mask)
 
         batch_loss = 0.0
         for i in range(5):
-            loss_c = loss_function(preds[i], real_grades[:, i])
-            batch_loss += loss_c
+            loss_c = loss_functions[i](preds[i], real_grades[:, i])
+            batch_loss += loss_weights[i] * loss_c
             competences_loss[i] += loss_c.item()
 
         epoch_loss += batch_loss.item()
-        batch_loss.backward()
-        optmizer.step()
+        window_loss_sum += batch_loss.item()
+        window_count += 1
+
+        (batch_loss / grad_accum_steps).backward()
+
+        is_last_batch = (step + 1) == num_batches
+        if (step + 1) % grad_accum_steps == 0 or is_last_batch:
+            optmizer.step()
+            if scheduler is not None and scheduler_step_mode == "step":
+                scheduler.step()
+            optmizer.zero_grad()
+
+            if history is not None:
+                history.add_train_step(window_loss_sum / window_count)
+            window_loss_sum = 0.0
+            window_count = 0
     
     competences_loss_avg = [c_loss/len(loader) for c_loss in competences_loss]
     return epoch_loss/len(loader), competences_loss_avg
 
 @torch.no_grad()
-def evaluate(model, loader, loss_function, device):
+def evaluate(model, loader, loss_functions, device, loss_weights):
     model.eval()
 
     val_loss = 0.0
@@ -47,8 +69,8 @@ def evaluate(model, loader, loss_function, device):
 
         batch_loss = 0.0
         for i in range(5):
-            loss_c = loss_function(preds[i], real_grades[:, i])
-            batch_loss += loss_c
+            loss_c = loss_functions[i](preds[i], real_grades[:, i])
+            batch_loss += loss_weights[i] * loss_c
             competences_loss[i] += loss_c.item()
             
             all_preds[i].append(preds[i].cpu())
@@ -68,10 +90,29 @@ def evaluate(model, loader, loss_function, device):
     competences_loss_avg = [c_loss/len(loader) for c_loss in competences_loss]
     return val_loss/len(loader), competences_loss_avg, rmses
 
-def run_training(model, train_loader, val_loader, optimizer, loss_function, epochs, device):
+def run_training(model, train_loader, val_loader, optimizer, epochs, device, scheduler=None, scheduler_step_mode=None):
+    loss_weights = get_loss_weights()
+    grad_accum_steps = get_grad_accum_steps()
+    early_stopping = build_early_stopping()
+    history = TrainingHistory()
+
+    train_loss_functions = [fn.to(device) for fn in build_train_loss_functions(train_loader)]
+    eval_loss_functions = [fn.to(device) for fn in build_eval_loss_functions()]
+
     for epoch in range(1, epochs + 1):
-        train_loss, train_comp = train_one_epoch(model, train_loader, optimizer, loss_function, device)
-        val_loss, val_comp, val_rmses = evaluate(model, val_loader, loss_function, device)
+        train_loss, train_comp = train_one_epoch(
+            model, train_loader, optimizer, train_loss_functions, device,
+            loss_weights=loss_weights,
+            grad_accum_steps=grad_accum_steps,
+            scheduler=scheduler,
+            scheduler_step_mode=scheduler_step_mode,
+            history=history
+        )
+        val_loss, val_comp, val_rmses = evaluate(model, val_loader, eval_loss_functions, device, loss_weights=loss_weights)
+
+        current_lr = optimizer.param_groups[0]["lr"]
+        history.add_epoch(epoch, train_loss, val_loss, train_comp, val_comp, val_rmses, current_lr)
+        history.add_eval_point(val_loss)
 
         print(f"Epoch {epoch}/{epochs}")
         print(f"Global Loss | Train: {train_loss:.4f} | Val: {val_loss:.4f}")
@@ -80,7 +121,29 @@ def run_training(model, train_loader, val_loader, optimizer, loss_function, epoc
         print(f"Val Loss    | C1: {val_comp[0]:.4f} | C2: {val_comp[1]:.4f} | C3: {val_comp[2]:.4f} | C4: {val_comp[3]:.4f} | C5: {val_comp[4]:.4f}")
         print("-" * 85)
         print(f"Val RMSE    | C1: {val_rmses[0]:.1f}   | C2: {val_rmses[1]:.1f}   | C3: {val_rmses[2]:.1f}   | C4: {val_rmses[3]:.1f}   | C5: {val_rmses[4]:.1f}")
+        print(f"Learning Rate: {current_lr:.2e}")
         print("=" * 85)
+
+        if scheduler is not None and scheduler_step_mode == "epoch":
+            scheduler.step(val_loss)
+
+        if early_stopping is not None:
+            improved = early_stopping.step(val_loss, model, epoch)
+            if improved:
+                print(f"[Early Stopping] New best model saved in '{early_stopping.checkpoint_path}' (epoch {epoch}, val_loss={val_loss:.4f}).")
+            else:
+                print(f"[Early Stopping] No improvement in {early_stopping.counter}/{early_stopping.patience} epoch(s)")
+
+            if early_stopping.should_stop:
+                print(f"[Early Stopping] Training interrupted in epoch {epoch}. Best epoch: {early_stopping.best_epoch} (val_loss={early_stopping.best_score:.4f})")
+                print("=" * 85)
+                break
+
+    if early_stopping is not None and early_stopping.restore_best_weights:
+        model = early_stopping.load_best_weights(model, map_location=device)
+        print(f"[Early Stopping] Weights from the best checkpoint (epoch {early_stopping.best_epoch}) restored to the model.")
+
+    return history
 
 @torch.no_grad()
 def get_predictions(model, loader, device):
@@ -113,11 +176,11 @@ def run_testing(model, test_loader, device):
 
     final_metrics = {}
     matrices = {}
-    width = 85
+    width = 98
     print("\n" + "=" * width)
     print(f"{'Evaluation Metrics in the Test Set':^{width}}")
     print("=" * width)
-    print(f"{'COMP':^6} | {'QWK':^8} | {'RMSE':^8} | {'F1-MACRO':^10} | {'ACC':^7} | {'ACC_REL':^9} | {'ACC_ENEM':^10}")
+    print(f"{'COMP':^6} | {'QWK':^8} | {'RMSE':^8} | {'F1-MACRO':^10} | {'F1-WEIGHT':^10} | {'ACC':^7} | {'ACC_REL':^9} | {'ACC_ENEM':^10}")
     print("-" * width)
     for i in range(5):
         metrics = calculate_enem_metrics(y_true_dict[i], y_pred_dict[i], step=40)
@@ -125,6 +188,7 @@ def run_testing(model, test_loader, device):
         final_metrics[f"C{i+1}_QWK"] = metrics['QWK']
         final_metrics[f"C{i+1}_RMSE"] = metrics['RMSE']
         final_metrics[f"C{i+1}_F1_Macro"] = metrics['F1_Macro']
+        final_metrics[f"C{i+1}_F1_Weighted"] = metrics['F1_Weighted']
         final_metrics[f"C{i+1}_Acc"] = metrics['Acc']
         final_metrics[f"C{i+1}_Acc_Relaxed"] = metrics['Acc_Relaxed']
         final_metrics[f"C{i+1}_Acc_Enem"] = metrics['Acc_Enem']
@@ -134,12 +198,13 @@ def run_testing(model, test_loader, device):
         c_name = f"C{i+1}"
         qwk = f"{metrics['QWK']:.4f}"
         rmse = f"{metrics['RMSE']:.2f}"
-        f1 = f"{metrics['F1_Macro']:.4f}"
+        f1_macro = f"{metrics['F1_Macro']:.4f}"
+        f1_weighted = f"{metrics['F1_Weighted']:.4f}"
         acc = f"{metrics['Acc'] * 100:.1f}%"
         acc_rel = f"{metrics['Acc_Relaxed'] * 100:.1f}%"
         acc_enem = f"{metrics['Acc_Enem'] * 100:.1f}%"
 
-        print(f"{c_name:^6} | {qwk:^8} | {rmse:^8} | {f1:^10} | {acc:^7} | {acc_rel:^9} | {acc_enem:^10}")
+        print(f"{c_name:^6} | {qwk:^8} | {rmse:^8} | {f1_macro:^10} | {f1_weighted:^10} | {acc:^7} | {acc_rel:^9} | {acc_enem:^10}")
     print("=" * width + "\n")
 
     print(f"\n{'Confusion Matrix (Rows: Actual | Columns: Predicted)':^{width}}")
