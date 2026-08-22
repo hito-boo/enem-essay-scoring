@@ -20,10 +20,39 @@
 
     "params": {
         "seed": 21,
-        "batch_size": 8,
-        "epochs": 1,
         "learning_rate": 2e-5,
-        "weight_decay": 0.1,
-        "drop_out": [0.1, 0.0, 0.0, 0.0, 0.0, 0.0]
+        "weight_decay": 0.01,
+        "epochs": 10,
+        "drop_out": [0.1, 0.0, 0.0, 0.0, 0.0, 0.0],
+        "loss_weights": [0.18, 0.21, 0.21, 0.18, 0.22],
+        "batch_size": 8
+    },
+
+    "class_balanced_loss": {
+        "enabled": true
+    },
+
+    "early_stopping": {
+        "enabled": true,
+        "patience": 3,
+        "min_delta": 0.0001,
+        "checkpoint_dir": "checkpoints",
+        "checkpoint_name": "best_model.pt",
+        "restore_best_weights": true
+    },
+
+    "gradient_accumulation": {
+        "enabled": true,
+        "steps": 2
+    },
+
+    "lr_scheduler": {
+        "enabled": true,
+        "type": "linear_warmup",
+        "warmup_ratio": 0.1
+    },
+
+    "training_evaluation": {
+        "output_dir": "results/training_history"
     }
 }
