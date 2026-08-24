@@ -23,7 +23,7 @@ def flatten_config(config):
         else:
             flat_config[key] = value
 
-    for section in ("early_stopping", "gradient_accumulation", "lr_scheduler"):
+    for section in ("early_stopping", "gradient_accumulation", "lr_scheduler", "class_balanced_loss"):
         for key, value in config.get(section, {}).items():
             flat_config[f"{section}_{key}"] = value
 

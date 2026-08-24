@@ -17,6 +17,9 @@ class ClassBalancedMSELoss(nn.Module):
         return (squared_error * weights).mean()
 
 def compute_class_weights(train_loader, num_classes=N_CLASSES):
+    cb_config = CONFIG.get("class_balanced_loss", {})
+    power = cb_config.get("power", 1.0)
+
     counts = [torch.zeros(num_classes) for _ in range(5)]
 
     for batch in train_loader:
@@ -27,8 +30,8 @@ def compute_class_weights(train_loader, num_classes=N_CLASSES):
     weights = []
     for i in range(5):
         freq = counts[i].clamp(min=1.0)
-        inv_freq = 1.0 / freq
-        normalized = inv_freq * (num_classes / inv_freq.sum())
+        raw_weights = 1.0 / (freq ** power)
+        normalized = raw_weights * (num_classes / raw_weights.sum())
         weights.append(normalized)
 
     return weights
@@ -40,7 +43,8 @@ def build_train_loss_functions(train_loader):
         loss_cls = loss_mapping[CONFIG["loss_function"]]
         return [loss_cls() for _ in range(5)]
 
-    print("[Loss] Class Balanced Loss Activated - Weights By Class (Inverse Frequeny)...")
+    power = cb_config.get("power", 1.0)
+    print(f"[Loss] Class Balanced Loss Activated (Power = {power}) - Weights By Class...")
     class_weights = compute_class_weights(train_loader)
     for i, w in enumerate(class_weights):
         print(f"[Loss] C{i + 1} weight by class (0-5): {[round(x, 2) for x in w.tolist()]}")

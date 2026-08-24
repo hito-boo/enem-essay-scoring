@@ -19,17 +19,18 @@
     "loss_function": "mse",
 
     "params": {
-        "seed": 21,
+        "seed": 25,
         "learning_rate": 2e-5,
         "weight_decay": 0.01,
         "epochs": 10,
         "drop_out": [0.1, 0.0, 0.0, 0.0, 0.0, 0.0],
-        "loss_weights": [0.18, 0.21, 0.21, 0.18, 0.22],
+        "loss_weights": [0.20, 0.20, 0.20, 0.20, 0.20],
         "batch_size": 8
     },
 
     "class_balanced_loss": {
-        "enabled": true
+        "enabled": true,
+        "power": 0.7
     },
 
     "early_stopping": {
