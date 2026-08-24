@@ -1,6 +1,8 @@
 mlflow.db
 __pycache__
-/checkpoints
+/checkpoints/*
+
 /mlruns
 /results/training_history
 /venv
+/tuning/configs/*
