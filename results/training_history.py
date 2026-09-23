@@ -46,7 +46,7 @@ class TrainingHistory:
             os.makedirs(dirname, exist_ok=True)
 
         self.to_dataframe().to_csv(filepath, index=False)
-        print(f"[Training History] Training history saved in: {filepath}")
+        print(f"\n[Training History] Training history saved in: {filepath}")
 
     def plot(self, filepath="results/training_history/history.png"):
         df = self.to_dataframe()
