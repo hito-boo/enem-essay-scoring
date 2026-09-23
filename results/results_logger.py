@@ -1,4 +1,5 @@
 import os
+from config import CONFIG
 import pandas as pd
 import mlflow
 from datetime import datetime
@@ -29,10 +30,11 @@ def flatten_config(config):
 
     return flat_config
 
-def save_to_csv(config, metrics_dict, filepath="results/experiments_log.csv"):
+def save_to_csv(config, metrics_dict, hardware_dict, filepath="results/experiments_log.csv"):
     row_data = {"timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
     row_data.update(flatten_config(config))
     row_data.update(metrics_dict)
+    row_data.update(hardware_dict)
     
     df_new = pd.DataFrame([row_data])
     
@@ -50,7 +52,7 @@ def save_to_csv(config, metrics_dict, filepath="results/experiments_log.csv"):
         
     print(f"\n[Results Logger] Results successfully saved in: {filepath}")
 
-def log_to_mlflow(config, metrics_dict, experiment_name="Enem-Essay-Scoring"):
+def log_to_mlflow(config, metrics_dict, hardware_dict, experiment_name="Enem-Essay-Scoring"):
     mlflow.set_experiment(experiment_name)
     
     with mlflow.start_run():
@@ -60,8 +62,9 @@ def log_to_mlflow(config, metrics_dict, experiment_name="Enem-Essay-Scoring"):
         string_metrics = {k: v for k, v in metrics_dict.items() if isinstance(v, str)}
         
         mlflow.log_metrics(numerical_metrics)
+        mlflow.log_metrics(numerical_metrics)
         
         for key, text_value in string_metrics.items():
             mlflow.log_text(text_value, f"confusion_matrices/{key}.txt")
             
-    print(f"[Logger] Experiment recorded in MLflow (Experiment: {experiment_name})")
+    print(f"[Results Logger] Experiment recorded in MLflow (Experiment: {experiment_name})")

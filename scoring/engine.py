@@ -1,4 +1,6 @@
+from config import CONFIG
 import torch
+from profiling.profiler import ResourceProfiler
 from scoring.metrics import calculate_enem_metrics
 from scoring.training_config import get_loss_weights, get_grad_accum_steps, build_early_stopping
 from scoring.losses import build_train_loss_functions, build_eval_loss_functions
@@ -99,6 +101,11 @@ def run_training(model, train_loader, val_loader, optimizer, epochs, device, sch
     train_loss_functions = [fn.to(device) for fn in build_train_loss_functions(train_loader)]
     eval_loss_functions = [fn.to(device) for fn in build_eval_loss_functions()]
 
+    if CONFIG["profiling"]:
+        print("\n[Profiler] Starting Profiler")
+        profiler = ResourceProfiler(interval=1.0)
+        profiler.start()
+
     for epoch in range(1, epochs + 1):
         train_loss, train_comp = train_one_epoch(
             model, train_loader, optimizer, train_loss_functions, device,
@@ -114,7 +121,7 @@ def run_training(model, train_loader, val_loader, optimizer, epochs, device, sch
         history.add_epoch(epoch, train_loss, val_loss, train_comp, val_comp, val_rmses, current_lr)
         history.add_eval_point(val_loss)
 
-        print(f"Epoch {epoch}/{epochs}")
+        print(f"\nEpoch {epoch}/{epochs}")
         print(f"Global Loss | Train: {train_loss:.4f} | Val: {val_loss:.4f}")
         print("-" * 85)
         print(f"Train Loss  | C1: {train_comp[0]:.4f} | C2: {train_comp[1]:.4f} | C3: {train_comp[2]:.4f} | C4: {train_comp[3]:.4f} | C5: {train_comp[4]:.4f}")
@@ -138,12 +145,19 @@ def run_training(model, train_loader, val_loader, optimizer, epochs, device, sch
                 print(f"[Early Stopping] Training interrupted in epoch {epoch}. Best epoch: {early_stopping.best_epoch} (val_loss={early_stopping.best_score:.4f})")
                 print("=" * 85)
                 break
-
+    
     if early_stopping is not None and early_stopping.restore_best_weights:
         model = early_stopping.load_best_weights(model, map_location=device)
         print(f"[Early Stopping] Weights from the best checkpoint (epoch {early_stopping.best_epoch}) restored to the model.")
 
-    return history
+    if CONFIG["profiling"]:
+        profiler.stop()
+        hardware_metrics = profiler.get_results()
+        print(f"\n[Profiler] Time in seconds: {hardware_metrics['time_seconds']:.2f}s")
+        print(f"[Profiler] CPU Average Usage: {hardware_metrics['avg_cpu_percent']:.1f}% | Peak: {hardware_metrics['peak_cpu_percent']:.1f}%")
+        print(f"[Profiler] GPU Average Usage: {hardware_metrics['avg_gpu_percent']:.1f}% | Peak: {hardware_metrics['peak_gpu_percent']:.1f}%")
+
+    return history, hardware_metrics
 
 @torch.no_grad()
 def get_predictions(model, loader, device):

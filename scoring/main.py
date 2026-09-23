@@ -11,11 +11,11 @@ from scoring.training_config import get_grad_accum_steps
 set_seed(CONFIG["params"]["seed"])
 
 # Get DataLoaders (check 'dataset' module)
-print("Building DataLoaders...")
+print("\n[Main] Building DataLoaders...")
 dataloaders = get_dataloaders()
 
 # Get Model (check 'models' module)
-print(f"Building Model and moving it to Device: {DEVICE}...")
+print(f"[Main] Building Model and moving it to Device: {DEVICE}...")
 model = get_model().to(DEVICE)
 
 # Get Model Optimizer (check 'scoring/optimizer.py')
@@ -28,8 +28,8 @@ num_training_steps = steps_per_epoch * CONFIG["params"]["epochs"]
 scheduler, scheduler_step_mode = build_scheduler(optimizer, num_training_steps)
 
 # Train Model (from engine.py; loss functions built internally, check 'scoring/losses.py')
-print("Starting training of the Model...")
-history = run_training(
+print("[Main] Starting training of the Model...")
+history, hardware_metrics = run_training(
     model,
     dataloaders["train"],
     dataloaders["validation"],
@@ -48,7 +48,7 @@ history.save_learning_curve_csv(f"{history_dir}/train_loss_steps.csv", f"{histor
 history.plot_learning_curve(f"{history_dir}/learning_curve.png")
 
 # Test Model (from engine.py)
-print("Starting testing of the Model...")
+print("\n[Main] Starting testing of the Model...")
 final_results = run_testing(
     model=model, 
     test_loader=dataloaders["test"], 
@@ -56,5 +56,7 @@ final_results = run_testing(
 )
 
 # Save results (check 'results' module)
-save_to_csv(CONFIG, final_results)
-log_to_mlflow(CONFIG, final_results)
+save_to_csv(CONFIG, final_results, hardware_metrics)
+log_to_mlflow(CONFIG, final_results, hardware_metrics)
+
+# python -m scoring.main
