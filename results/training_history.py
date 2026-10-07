@@ -17,7 +17,7 @@ class TrainingHistory:
     def add_eval_point(self, eval_loss):
         self.step_eval_loss.append({"step": self.global_step, "eval_loss": eval_loss})
 
-    def add_epoch(self, epoch, train_loss, val_loss, train_comp_loss, val_comp_loss, val_rmses, learning_rate):
+    def add_epoch(self, epoch, train_loss, val_loss, train_comp_loss, val_comp_loss, val_rmses, val_qwks, learning_rate):
         record = {
             "epoch": epoch,
             "train_loss": train_loss,
@@ -28,6 +28,7 @@ class TrainingHistory:
             record[f"train_loss_c{i+1}"] = train_comp_loss[i]
             record[f"val_loss_c{i+1}"] = val_comp_loss[i]
             record[f"val_rmse_c{i+1}"] = val_rmses[i]
+            record[f"val_qwk_c{i+1}"] = val_qwks[i]
 
         self.epoch_records.append(record)
 

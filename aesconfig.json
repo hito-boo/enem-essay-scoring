@@ -28,6 +28,10 @@
         "batch_size": 8
     },
 
+    "quantization": {
+        "checkpoint_path": "checkpoints/best_model.pt"
+    },
+
     "class_balanced_loss": {
         "enabled": true,
         "power": 0.7

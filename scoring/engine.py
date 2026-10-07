@@ -84,6 +84,7 @@ def evaluate(model, loader, loss_functions, device, loss_weights):
         val_loss += batch_loss.item()
     
     rmses = []
+    qwks = []
     for i in range(5):
         preds_all_c = torch.cat(all_preds[i]).float()
         grades_all_c = torch.cat(all_grades[i]).float()
@@ -92,8 +93,11 @@ def evaluate(model, loader, loss_functions, device, loss_weights):
         rmse_c = torch.sqrt(mse).item() * 40
         rmses.append(rmse_c)
 
+        qwk_c = calculate_enem_metrics(grades_all_c.numpy().astype(int), preds_all_c.numpy().astype(int), step=40)["QWK"]
+        qwks.append(qwk_c)
+
     competences_loss_avg = [c_loss/len(loader) for c_loss in competences_loss]
-    return val_loss/len(loader), competences_loss_avg, rmses
+    return val_loss/len(loader), competences_loss_avg, rmses, qwks
 
 def run_training(model, train_loader, val_loader, optimizer, epochs, device, scheduler=None, scheduler_step_mode=None):
     loss_weights = get_loss_weights()
@@ -153,13 +157,14 @@ def run_training(model, train_loader, val_loader, optimizer, epochs, device, sch
         model = early_stopping.load_best_weights(model, map_location=device)
         print(f"[Early Stopping] Weights from the best checkpoint (epoch {early_stopping.best_epoch}) restored to the model.")
 
-    if CONFIG["profiling"]:
+        if CONFIG["profiling"]:
         profiler.stop()
         hardware_metrics = profiler.get_results()
         print(f"\n[Profiler] Time in seconds: {hardware_metrics['time_seconds']:.2f}s")
         print(f"[Profiler] CPU Average Usage: {hardware_metrics['avg_cpu_percent']:.1f}% | Peak: {hardware_metrics['peak_cpu_percent']:.1f}%")
-        print(f"[Profiler] GPU Average Usage: {hardware_metrics['avg_gpu_percent']:.1f}% | Peak: {hardware_metrics['peak_gpu_percent']:.1f}%")
-
+        print(f"[Profiler] RAM Average: {hardware_metrics['avg_ram_mb']:.1f} MB | Peak: {hardware_metrics['peak_ram_mb']:.1f} MB")
+        print(f"[Profiler] Peak VRAM: {hardware_metrics['peak_vram_mb']:.1f} MB")
+        
     return history, hardware_metrics
 
 @torch.no_grad()
@@ -184,6 +189,9 @@ def get_predictions(model, loader, device):
     
     final_preds = {i: torch.cat(all_preds[i]).numpy() for i in range(5)}
     final_grades = {i: torch.cat(all_grades[i]).numpy() for i in range(5)}
+
+    final_preds["final"] = sum(final_preds[i] for i in range(5))
+    final_grades["final"] = sum(final_grades[i] for i in range(5))
 
     return final_grades, final_preds
 
@@ -221,6 +229,28 @@ def run_testing(model, test_loader, device):
         acc_enem = f"{metrics['Acc_Enem'] * 100:.1f}%"
 
         print(f"{c_name:^6} | {qwk:^8} | {rmse:^8} | {f1_macro:^10} | {f1_weighted:^10} | {acc:^7} | {acc_rel:^9} | {acc_enem:^10}")
+    
+    final_metrics_total = calculate_enem_metrics(
+        y_true_dict["final"], y_pred_dict["final"], step=40,
+        labels=list(range(26)), acc_enem_threshold=100,
+    )
+    
+    final_metrics["FINAL_QWK"] = final_metrics_total['QWK']
+    final_metrics["FINAL_RMSE"] = final_metrics_total['RMSE']
+    final_metrics["FINAL_F1_Macro"] = final_metrics_total['F1_Macro']
+    final_metrics["FINAL_F1_Weighted"] = final_metrics_total['F1_Weighted']
+    final_metrics["FINAL_Acc"] = final_metrics_total['Acc']
+    final_metrics["FINAL_Acc_Relaxed"] = final_metrics_total['Acc_Relaxed']
+    final_metrics["FINAL_Acc_Enem"] = final_metrics_total['Acc_Enem']
+    final_metrics["FINAL_Conf_Matrix"] = str(final_metrics_total['Confusion_Matrix'].tolist())
+    matrices["FINAL"] = final_metrics_total['Confusion_Matrix']
+    
+    print("-" * width)
+    print(f"{'FINAL':^6} | {final_metrics_total['QWK']:^8.4f} | {final_metrics_total['RMSE']:^8.2f} | "
+          f"{final_metrics_total['F1_Macro']:^10.4f} | {final_metrics_total['F1_Weighted']:^10.4f} | "
+          f"{final_metrics_total['Acc']*100:^6.1f}% | {final_metrics_total['Acc_Relaxed']*100:^8.1f}% | "
+          f"{final_metrics_total['Acc_Enem']*100:^9.1f}%")
+
     print("=" * width + "\n")
 
     print(f"\n{'Confusion Matrix (Rows: Actual | Columns: Predicted)':^{width}}")
