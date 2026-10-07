@@ -16,15 +16,15 @@
     },
 
     "optimizer": "adamw",
-    "loss_function": "mse",
+    "task_type": "ordinal",
 
     "params": {
-        "seed": 25,
+        "seed": 21,
         "learning_rate": 2e-5,
         "weight_decay": 0.01,
         "epochs": 10,
         "drop_out": [0.1, 0.0, 0.0, 0.0, 0.0, 0.0],
-        "loss_weights": [0.20, 0.20, 0.20, 0.20, 0.20],
+        "loss_weights": [0.18, 0.21, 0.21, 0.18, 0.22],
         "batch_size": 8
     },
 
@@ -55,5 +55,7 @@
 
     "training_evaluation": {
         "output_dir": "results/training_history"
-    }
+    },
+
+    "profiling": true
 }

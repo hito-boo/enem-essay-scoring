@@ -6,5 +6,7 @@ optimizer_mapping = {
 }
 
 loss_mapping = {
-    "mse": nn.MSELoss
+    "regression": nn.MSELoss,
+    "classification": nn.CrossEntropyLoss,
+    "ordinal": nn.BCEWithLogitsLoss,
 }

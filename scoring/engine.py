@@ -1,5 +1,6 @@
-from config import CONFIG
 import torch
+from config import CONFIG
+from task_strategy import prepare_targets, decode_predictions
 from profiling.profiler import ResourceProfiler
 from scoring.metrics import calculate_enem_metrics
 from scoring.training_config import get_loss_weights, get_grad_accum_steps, build_early_stopping
@@ -22,13 +23,14 @@ def train_one_epoch(model, loader, optmizer, loss_functions, device, loss_weight
     for step, batch in enumerate(tqdm(loader, desc="Training", leave=False)):
         input_ids = batch["input_ids"].to(device)
         attention_mask = batch["attention_mask"].to(device)
-        real_grades = batch["grades"][:, :5].float().to(device)
+        true_grades = batch["grades"][:, :5].long().to(device)
 
         preds = model(input_ids, attention_mask)
 
         batch_loss = 0.0
         for i in range(5):
-            loss_c = loss_functions[i](preds[i], real_grades[:, i])
+            targets_i = prepare_targets(true_grades[:, i])
+            loss_c = loss_functions[i](preds[i], targets_i, true_grades[:, i])
             batch_loss += loss_weights[i] * loss_c
             competences_loss[i] += loss_c.item()
 
@@ -65,25 +67,26 @@ def evaluate(model, loader, loss_functions, device, loss_weights):
     for batch in tqdm(loader, desc="Evaluating", leave=False):
         input_ids = batch["input_ids"].to(device)
         attention_mask = batch["attention_mask"].to(device)
-        real_grades = batch["grades"][:, :5].float().to(device)
+        true_grades = batch["grades"][:, :5].long().to(device)
     
         preds = model(input_ids, attention_mask)
 
         batch_loss = 0.0
         for i in range(5):
-            loss_c = loss_functions[i](preds[i], real_grades[:, i])
+            targets_i = prepare_targets(true_grades[:, i])
+            loss_c = loss_functions[i](preds[i], targets_i, true_grades[:, i])
             batch_loss += loss_weights[i] * loss_c
             competences_loss[i] += loss_c.item()
             
-            all_preds[i].append(preds[i].cpu())
-            all_grades[i].append(real_grades[:, i].cpu())
+            all_preds[i].append(decode_predictions(preds[i]).cpu())
+            all_grades[i].append(true_grades[:, i].cpu())
             
         val_loss += batch_loss.item()
     
     rmses = []
     for i in range(5):
-        preds_all_c = torch.cat(all_preds[i])
-        grades_all_c = torch.cat(all_grades[i])
+        preds_all_c = torch.cat(all_preds[i]).float()
+        grades_all_c = torch.cat(all_grades[i]).float()
 
         mse = ((preds_all_c - grades_all_c) ** 2).mean()
         rmse_c = torch.sqrt(mse).item() * 40
@@ -169,16 +172,15 @@ def get_predictions(model, loader, device):
     for batch in tqdm(loader, desc="Testing", leave=False):
         input_ids = batch["input_ids"].to(device)
         attention_mask = batch["attention_mask"].to(device)
-        real_grades = batch["grades"][:, :5].float().to(device)
+        true_grades = batch["grades"][:, :5].long().to(device)
     
         preds = model(input_ids, attention_mask)
 
         for i in range(5):
-            pred_discrete = torch.clamp(preds[i], min=0.0, max=5.0)
-            pred_discrete = torch.round(pred_discrete)
+            pred_discrete = decode_predictions(preds[i])
             
             all_preds[i].append(pred_discrete.cpu())
-            all_grades[i].append(real_grades[:, i].cpu())
+            all_grades[i].append(true_grades[:, i].cpu())
     
     final_preds = {i: torch.cat(all_preds[i]).numpy() for i in range(5)}
     final_grades = {i: torch.cat(all_grades[i]).numpy() for i in range(5)}
