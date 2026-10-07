@@ -1,5 +1,6 @@
 from config import CONFIG
-from transformers import BertModel
+from transformers import AutoModel
+from models.lora import apply_lora
 import torch.nn as nn
 
 class BaseModel(nn.Module):
@@ -11,11 +12,13 @@ class BaseModel(nn.Module):
     ):
         super().__init__()
         self.dropout = nn.Dropout(dropout)
-        self.bert = BertModel.from_pretrained(bert_name)
+        self.bert = AutoModel.from_pretrained(bert_name)
+        self.bert = apply_lora(self.bert)
         self.heads = heads
 
     def forward(self, input_ids, attention_mask):
         bert_out = self.bert(input_ids=input_ids, attention_mask=attention_mask)
+        pooler = getattr(bert_out, "pooler_output", None)
         cls_repr = bert_out.pooler_output
         cls_repr = self.dropout(cls_repr)
         return [head(cls_repr) for head in self.heads]

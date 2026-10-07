@@ -12,6 +12,7 @@ TRIALS_DIR.mkdir(parents=True, exist_ok=True)
 
 with BASE_CONFIG_PATH.open("r", encoding="utf-8") as f:
     BASE_CONFIG = json.load(f)
+SEEDS = [21]
 
 BASELINE = [
     (("params", "learning_rate"), 2e-5),
@@ -19,9 +20,9 @@ BASELINE = [
     (("params", "batch_size"), 8),
     (("params", "epochs"), 10),
     (("params", "drop_out"), [0.1, 0.0, 0.0, 0.0, 0.0, 0.0]),
-    (("params", "loss_weights"), [0.20, 0.20, 0.20, 0.20, 0.20]), # [0.18, 0.21, 0.21, 0.18, 0.22]
+    (("params", "loss_weights"), [0.18, 0.21, 0.21, 0.18, 0.22]), 
     (("class_balanced_loss", "enabled"), True),
-    (("class_balanced_loss", "power"), 0.7),
+    (("class_balanced_loss", "power"), 0.70),
     (("early_stopping", "enabled"), True),
     (("early_stopping", "patience"), 3),
     (("early_stopping", "min_delta"), 0.0001),
@@ -62,9 +63,17 @@ SEARCH_SPACE_ROUNDS = {
         (("class_balanced_loss", "enabled"), [False]),
         (("params", "loss_weights"), [[0.2, 0.2, 0.2, 0.2, 0.2]]),
     ],
+
+    7: [
+        (("params", "loss_weights"), [
+            [0.15, 0.30, 0.25, 0.15, 0.15],
+            [0.15, 0.35, 0.20, 0.15, 0.15],
+            [0.15, 0.25, 0.25, 0.15, 0.20],
+        ]),
+    ],
 }
 
-ACTIVE_ROUND = 5
+ACTIVE_ROUND = 1
 
 SEARCH_SPACE = SEARCH_SPACE_ROUNDS[ACTIVE_ROUND]
 
@@ -87,17 +96,36 @@ def path_tag(path, value):
             parts[-1] = f"{parts[-1]}[{key}]"
         else:
             parts.append(str(key))
-    return f"{'.'.join(parts)}={value}"
+
+    if isinstance(value, list):
+        value_str = "-".join(str(v) for v in value)
+    else:
+        value_str = str(value)
+
+    return f"{'.'.join(parts)}={value_str}"
 
 def build_trials():
-    trials = [{"tag": "baseline", "overrides": BASELINE}]
+    base_trials = [{"tag": "baseline", "overrides": BASELINE}]
 
     for path, values in SEARCH_SPACE:
         for value in values:
             tag = path_tag(path, value)
             overrides = BASELINE + [(path, value)]
-            trials.append({"tag": tag, "overrides": overrides})
+            base_trials.append({"tag": tag, "overrides": overrides})
 
+    if len(SEEDS) == 1:
+        seed = SEEDS[0]
+        for t in base_trials:
+            t["overrides"] = t["overrides"] + [(("params", "seed"), seed)]
+        return base_trials
+
+    trials = []
+    for t in base_trials:
+        for seed in SEEDS:
+            trials.append({
+                "tag": f"{t['tag']}_seed{seed}",
+                "overrides": t["overrides"] + [(("params", "seed"), seed)],
+            })
     return trials
 
 def run_trial(trial, index, total):
@@ -126,6 +154,7 @@ def main():
     trials = build_trials()
 
     print(f"Active round: {ACTIVE_ROUND}")
+    print(f"Seeds per trial: {SEEDS}")
     print(f"Parameters to test: {[path[-1] for path, _ in SEARCH_SPACE]}")
     print(f"Number of trials (Baseline + Alternatives): {len(trials)}")
     print(f"Configurations in: {TRIALS_DIR}")

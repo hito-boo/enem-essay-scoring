@@ -22,5 +22,8 @@ matplotlib==3.11.0
 seaborn==0.13.2
 
 # Profiling
-psutil=7.2.2
-nvidia-ml-py=13.610.43
+psutil==7.2.2
+nvidia-ml-py==13.610.43
+
+# LoRA
+peft==0.21.2
