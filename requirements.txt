@@ -2,6 +2,7 @@
 
 # Core Machine Learning
 torch==2.5.1
+coral-pytorch==1.4.0
 
 # Hugging Face (Modelos e Tokenizadores)
 transformers==4.46.0

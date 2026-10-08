@@ -1,4 +1,5 @@
 import torch
+from coral_pytorch.dataset import corn_label_from_logits
 from config import CONFIG
 
 N_CLASSES = 6
@@ -47,7 +48,12 @@ def decode_regression(preds):
 def decode_classification(preds):
     return preds.argmax(dim=-1)
 
+def get_ordinal_method():
+    return CONFIG.get("ordinal", {}).get("method", "extended_binary")
+
 def decode_ordinal(preds):
+    if get_ordinal_method() == "corn":
+        return corn_label_from_logits(preds)
     return (torch.sigmoid(preds) > 0.5).sum(dim=-1).long()
 
 DECODERS = {

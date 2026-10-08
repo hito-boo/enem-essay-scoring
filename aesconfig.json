@@ -15,12 +15,18 @@
         "c5": "linear"
     },
 
+    "profiling": true,
+
     "optimizer": "adamw",
+
     "task_type": "ordinal",
+    "ordinal": {
+        "method": "extended_binary"
+    },
 
     "params": {
         "seed": 21,
-        "learning_rate": 2e-5,
+        "learning_rate": 5e-5,
         "weight_decay": 0.01,
         "epochs": 10,
         "drop_out": [0.1, 0.0, 0.0, 0.0, 0.0, 0.0],
@@ -28,16 +34,15 @@
         "batch_size": 8
     },
 
-    "lora": {
+    "lr_scheduler": {
         "enabled": true,
-        "r": 8,
-        "alpha": 16,
-        "dropout": 0.1,
-        "target_modules": ["query", "value"]
+        "type": "linear_warmup",
+        "warmup_ratio": 0.1
     },
 
-    "quantization": {
-        "checkpoint_path": "checkpoints/best_model.pt"
+    "gradient_accumulation": {
+        "enabled": true,
+        "steps": 2
     },
 
     "class_balanced_loss": {
@@ -54,20 +59,19 @@
         "restore_best_weights": true
     },
 
-    "gradient_accumulation": {
-        "enabled": true,
-        "steps": 2
+    "lora": {
+        "enabled": false,
+        "r": 8,
+        "alpha": 16,
+        "dropout": 0.1,
+        "target_modules": ["query", "value"]
     },
 
-    "lr_scheduler": {
-        "enabled": true,
-        "type": "linear_warmup",
-        "warmup_ratio": 0.1
+    "quantization": {
+        "checkpoint_path": "checkpoints/best_model.pt"
     },
 
     "training_evaluation": {
         "output_dir": "results/training_history"
-    },
-
-    "profiling": true
+    }
 }

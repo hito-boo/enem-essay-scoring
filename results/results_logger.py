@@ -12,6 +12,7 @@ def flatten_config(config):
         
     flat_config["optimizer"] = config.get("optimizer", "N/A")
     flat_config["task_type"] = config.get("task_type", "N/A")
+    flat_config["ordinal_method"] = config.get("ordinal", {}).get("method", "N/A")
     tuning_info = config.get("_tuning", {})
     flat_config["tuning_stage"] = tuning_info.get("stage", "N/A")
     flat_config["tuning_tag"] = tuning_info.get("tag", "N/A")
