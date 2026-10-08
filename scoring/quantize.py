@@ -11,9 +11,13 @@ from results.results_logger import save_to_csv, log_to_mlflow
 DEVICE = torch.device("cpu")
 
 def model_size_mb(model):
-    with tempfile.NamedTemporaryFile(suffix=".pt") as tmp:
+    tmp = tempfile.NamedTemporaryFile(suffix=".pt", delete=False)
+    tmp.close()
+    try:
         torch.save(model.state_dict(), tmp.name)
         return os.path.getsize(tmp.name) / (1024 ** 2)
+    finally:
+        os.remove(tmp.name)
 
 def main():
     set_seed(CONFIG["params"]["seed"])

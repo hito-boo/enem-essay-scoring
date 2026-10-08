@@ -4,12 +4,12 @@ import threading
 import torch
 
 class ResourceProfiler:
-    def __init__(self, interval=1.0):
+    def __init__(self, interval=1.0, device=None):
         self.interval = interval
         self.device = device if device is not None else torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.has_gpu = self.device.type == "cuda"
         self.cpu_samples = []
-        self.gpu_samples_mb = []
+        self.ram_samples_mb = []
         self.start_time = None
         self.end_time = None
         self.running = False
@@ -25,7 +25,7 @@ class ResourceProfiler:
 
     def start(self):
         self.cpu_samples = []
-        self.gpu_samples_mb = []
+        self.ram_samples_mb = []
         self.running = True
         self.start_time = time.time()
         

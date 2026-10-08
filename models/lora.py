@@ -1,6 +1,10 @@
+try:
+    import torch.distributed.tensor
+except ImportError:
+    pass
+
 from config import CONFIG
 from peft import LoraConfig, inject_adapter_in_model
-
 
 def apply_lora(bert):
     lora_config = CONFIG.get("lora", {})

@@ -49,9 +49,10 @@ def build_trials(baseline, search_space, seeds):
             })
     return trials
 
-def run_trial(trial, index, total, trials_dir):
+def run_trial(trial, index, total, trials_dir, stage_name):
     tag, overrides = trial["tag"], trial["overrides"]
     trial_config = build_trial_config(overrides)
+    trial_config["_tuning"] = {"stage": stage_name, "tag": tag}
 
     trial_config_path = trials_dir / f"{tag}.json"
     with trial_config_path.open("w", encoding="utf-8") as f:
@@ -79,4 +80,4 @@ def run_stage(stage_name, baseline, search_space, seeds=(21,)):
     print("Results in: results/experiments_log.csv (line by trial)")
 
     for i, trial in enumerate(trials, start=1):
-        run_trial(trial, i, len(trials), trials_dir)
+        run_trial(trial, i, len(trials), trials_dir, stage_name)
