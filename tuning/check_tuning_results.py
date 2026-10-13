@@ -1,6 +1,6 @@
 import pandas as pd
 
-stage = "stage1_bertimbau_baseline_ordinal"
+stage = "stage2_bertimbau_lora"
 
 df = pd.read_csv("results/experiments_log.csv")
 rodada = df[df["tuning_stage"] == stage]

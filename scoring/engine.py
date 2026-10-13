@@ -42,6 +42,8 @@ def train_one_epoch(model, loader, optmizer, loss_functions, device, loss_weight
 
         is_last_batch = (step + 1) == num_batches
         if (step + 1) % grad_accum_steps == 0 or is_last_batch:
+            if CONFIG.get("gradient_clipping", {}).get("enabled", False):
+                torch.nn.utils.clip_grad_norm_(model.parameters(), CONFIG["gradient_clipping"].get("max_norm", 1.0))
             optmizer.step()
             if scheduler is not None and scheduler_step_mode == "step":
                 scheduler.step()

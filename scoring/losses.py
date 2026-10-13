@@ -63,7 +63,6 @@ def build_train_loss_functions(train_loader):
     cb_config = CONFIG.get("class_balanced_loss", {})
 
     if not cb_config.get("enabled", False):
-        loss_cls = loss_mapping[CONFIG["loss_function"]]
         return build_eval_loss_functions()
 
     power = cb_config.get("power", 1.0)

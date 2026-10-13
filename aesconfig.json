@@ -35,19 +35,19 @@
     },
 
     "lr_scheduler": {
-        "enabled": true,
+        "enabled": false,
         "type": "linear_warmup",
         "warmup_ratio": 0.1
     },
 
     "gradient_accumulation": {
         "enabled": true,
-        "steps": 2
+        "steps": 4
     },
 
     "class_balanced_loss": {
         "enabled": true,
-        "power": 0.7
+        "power": 1.0
     },
 
     "early_stopping": {
@@ -67,8 +67,13 @@
         "target_modules": ["query", "value"]
     },
 
+    "gradient_clipping": {
+        "enabled": false,
+        "max_norm": 1.0
+    },
+
     "quantization": {
-        "checkpoint_path": "checkpoints/best_model.pt"
+        "checkpoint_path": "checkpoints/bertimbau-baseline.pt"
     },
 
     "training_evaluation": {
