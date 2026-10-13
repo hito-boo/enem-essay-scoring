@@ -2,7 +2,16 @@ import torch
 import torch.nn as nn
 from config import CONFIG
 from scoring.mapping import loss_mapping
-from task_strategy import N_CLASSES, get_task_type
+from task_strategy import N_CLASSES, get_task_type, get_ordinal_method
+from coral_pytorch.losses import corn_loss
+
+class CornLossWrapper(nn.Module):
+    def __init__(self, num_classes):
+        super().__init__()
+        self.num_classes = num_classes
+
+    def forward(self, preds, targets, true_classes):
+        return corn_loss(preds, true_classes, num_classes=self.num_classes)
 
 class PlainLoss(nn.Module):
     def __init__(self, criterion):
@@ -46,10 +55,14 @@ def compute_class_weights(train_loader, num_classes=N_CLASSES):
     return weights
 
 def build_train_loss_functions(train_loader):
+    if get_task_type() == "ordinal" and get_ordinal_method() == "corn":
+        if CONFIG.get("class_balanced_loss", {}).get("enabled", False):
+            print("[Loss] Class Balanced Loss disabled for CORN.")
+        return build_eval_loss_functions()
+
     cb_config = CONFIG.get("class_balanced_loss", {})
 
     if not cb_config.get("enabled", False):
-        loss_cls = loss_mapping[CONFIG["loss_function"]]
         return build_eval_loss_functions()
 
     power = cb_config.get("power", 1.0)
@@ -63,5 +76,7 @@ def build_train_loss_functions(train_loader):
 
 
 def build_eval_loss_functions():
+    if get_task_type() == "ordinal" and get_ordinal_method() == "corn":
+        return [CornLossWrapper(N_CLASSES) for _ in range(5)]
     loss_cls = loss_mapping[get_task_type()]
     return [PlainLoss(loss_cls()) for _ in range(5)]

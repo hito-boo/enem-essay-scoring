@@ -2,6 +2,7 @@
 
 # Core Machine Learning
 torch==2.5.1
+coral-pytorch==1.4.0
 
 # Hugging Face (Modelos e Tokenizadores)
 transformers==4.46.0
@@ -22,5 +23,8 @@ matplotlib==3.11.0
 seaborn==0.13.2
 
 # Profiling
-psutil=7.2.2
-nvidia-ml-py=13.610.43
+psutil==7.2.2
+nvidia-ml-py==13.610.43
+
+# LoRA
+peft==0.21.2

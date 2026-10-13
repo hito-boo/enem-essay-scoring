@@ -5,4 +5,5 @@ __pycache__
 /mlruns
 /results/training_history
 /venv
+/.venv
 /tuning/configs/*

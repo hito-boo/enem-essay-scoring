@@ -42,6 +42,8 @@ def train_one_epoch(model, loader, optmizer, loss_functions, device, loss_weight
 
         is_last_batch = (step + 1) == num_batches
         if (step + 1) % grad_accum_steps == 0 or is_last_batch:
+            if CONFIG.get("gradient_clipping", {}).get("enabled", False):
+                torch.nn.utils.clip_grad_norm_(model.parameters(), CONFIG["gradient_clipping"].get("max_norm", 1.0))
             optmizer.step()
             if scheduler is not None and scheduler_step_mode == "step":
                 scheduler.step()
@@ -84,6 +86,7 @@ def evaluate(model, loader, loss_functions, device, loss_weights):
         val_loss += batch_loss.item()
     
     rmses = []
+    qwks = []
     for i in range(5):
         preds_all_c = torch.cat(all_preds[i]).float()
         grades_all_c = torch.cat(all_grades[i]).float()
@@ -92,14 +95,19 @@ def evaluate(model, loader, loss_functions, device, loss_weights):
         rmse_c = torch.sqrt(mse).item() * 40
         rmses.append(rmse_c)
 
+        qwk_c = calculate_enem_metrics(grades_all_c.numpy().astype(int), preds_all_c.numpy().astype(int), step=40)["QWK"]
+        qwks.append(qwk_c)
+
     competences_loss_avg = [c_loss/len(loader) for c_loss in competences_loss]
-    return val_loss/len(loader), competences_loss_avg, rmses
+    return val_loss/len(loader), competences_loss_avg, rmses, qwks
 
 def run_training(model, train_loader, val_loader, optimizer, epochs, device, scheduler=None, scheduler_step_mode=None):
     loss_weights = get_loss_weights()
     grad_accum_steps = get_grad_accum_steps()
     early_stopping = build_early_stopping()
     history = TrainingHistory()
+    hardware_metrics = {}
+    best_val_metrics = {}
 
     train_loss_functions = [fn.to(device) for fn in build_train_loss_functions(train_loader)]
     eval_loss_functions = [fn.to(device) for fn in build_eval_loss_functions()]
@@ -118,18 +126,19 @@ def run_training(model, train_loader, val_loader, optimizer, epochs, device, sch
             scheduler_step_mode=scheduler_step_mode,
             history=history
         )
-        val_loss, val_comp, val_rmses = evaluate(model, val_loader, eval_loss_functions, device, loss_weights=loss_weights)
+        val_loss, val_comp, val_rmses, val_qwks = evaluate(model, val_loader, eval_loss_functions, device, loss_weights=loss_weights)
 
         current_lr = optimizer.param_groups[0]["lr"]
-        history.add_epoch(epoch, train_loss, val_loss, train_comp, val_comp, val_rmses, current_lr)
+        history.add_epoch(epoch, train_loss, val_loss, train_comp, val_comp, val_rmses, val_qwks, current_lr)
         history.add_eval_point(val_loss)
 
         print(f"\nEpoch {epoch}/{epochs}")
         print(f"Global Loss | Train: {train_loss:.4f} | Val: {val_loss:.4f}")
         print("-" * 85)
         print(f"Train Loss  | C1: {train_comp[0]:.4f} | C2: {train_comp[1]:.4f} | C3: {train_comp[2]:.4f} | C4: {train_comp[3]:.4f} | C5: {train_comp[4]:.4f}")
-        print(f"Val Loss    | C1: {val_comp[0]:.4f} | C2: {val_comp[1]:.4f} | C3: {val_comp[2]:.4f} | C4: {val_comp[3]:.4f} | C5: {val_comp[4]:.4f}")
+        print(f"Val Loss    | C1: {val_comp[0]:.4f}   | C2: {val_comp[1]:.4f}   | C3: {val_comp[2]:.4f}   | C4: {val_comp[3]:.4f}   | C5: {val_comp[4]:.4f}")
         print("-" * 85)
+        print(f"Val QWK     | C1: {val_qwks[0]:.2f}   | C2: {val_qwks[1]:.2f}   | C3: {val_qwks[2]:.2f}   | C4: {val_qwks[3]:.2f}   | C5: {val_qwks[4]:.1f}")
         print(f"Val RMSE    | C1: {val_rmses[0]:.1f}   | C2: {val_rmses[1]:.1f}   | C3: {val_rmses[2]:.1f}   | C4: {val_rmses[3]:.1f}   | C5: {val_rmses[4]:.1f}")
         print(f"Learning Rate: {current_lr:.2e}")
         print("=" * 85)
@@ -137,9 +146,17 @@ def run_training(model, train_loader, val_loader, optimizer, epochs, device, sch
         if scheduler is not None and scheduler_step_mode == "epoch":
             scheduler.step(val_loss)
 
+        def snapshot_best_val(val_loss, val_rmses, val_qwks):
+            snapshot = {"val_loss": val_loss, "val_qwk_mean": sum(val_qwks) / len(val_qwks)}
+            for i in range(5):
+                snapshot[f"val_qwk_c{i+1}"] = val_qwks[i]
+                snapshot[f"val_rmse_c{i+1}"] = val_rmses[i]
+            return snapshot
+
         if early_stopping is not None:
             improved = early_stopping.step(val_loss, model, epoch)
             if improved:
+                best_val_metrics = snapshot_best_val(val_loss, val_rmses, val_qwks)
                 print(f"[Early Stopping] New best model saved in '{early_stopping.checkpoint_path}' (epoch {epoch}, val_loss={val_loss:.4f}).")
             else:
                 print(f"[Early Stopping] No improvement in {early_stopping.counter}/{early_stopping.patience} epoch(s)")
@@ -148,19 +165,22 @@ def run_training(model, train_loader, val_loader, optimizer, epochs, device, sch
                 print(f"[Early Stopping] Training interrupted in epoch {epoch}. Best epoch: {early_stopping.best_epoch} (val_loss={early_stopping.best_score:.4f})")
                 print("=" * 85)
                 break
+        else:
+            best_val_metrics = snapshot_best_val(val_loss, val_rmses, val_qwks)
     
     if early_stopping is not None and early_stopping.restore_best_weights:
         model = early_stopping.load_best_weights(model, map_location=device)
         print(f"[Early Stopping] Weights from the best checkpoint (epoch {early_stopping.best_epoch}) restored to the model.")
 
-    if CONFIG["profiling"]:
-        profiler.stop()
-        hardware_metrics = profiler.get_results()
-        print(f"\n[Profiler] Time in seconds: {hardware_metrics['time_seconds']:.2f}s")
-        print(f"[Profiler] CPU Average Usage: {hardware_metrics['avg_cpu_percent']:.1f}% | Peak: {hardware_metrics['peak_cpu_percent']:.1f}%")
-        print(f"[Profiler] GPU Average Usage: {hardware_metrics['avg_gpu_percent']:.1f}% | Peak: {hardware_metrics['peak_gpu_percent']:.1f}%")
-
-    return history, hardware_metrics
+        if CONFIG["profiling"]:
+            profiler.stop()
+            hardware_metrics = profiler.get_results()
+            print(f"\n[Profiler] Time in seconds: {hardware_metrics['time_seconds']:.2f}s")
+            print(f"[Profiler] CPU Average Usage: {hardware_metrics['avg_cpu_percent']:.1f}% | Peak: {hardware_metrics['peak_cpu_percent']:.1f}%")
+            print(f"[Profiler] RAM Average: {hardware_metrics['avg_ram_mb']:.1f} MB | Peak: {hardware_metrics['peak_ram_mb']:.1f} MB")
+            print(f"[Profiler] Peak VRAM: {hardware_metrics['peak_vram_mb']:.1f} MB")
+        
+    return history, hardware_metrics, best_val_metrics
 
 @torch.no_grad()
 def get_predictions(model, loader, device):

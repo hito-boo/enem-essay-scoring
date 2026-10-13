@@ -11,6 +11,11 @@ def flatten_config(config):
         flat_config[f"arch_{key}"] = value
         
     flat_config["optimizer"] = config.get("optimizer", "N/A")
+    flat_config["task_type"] = config.get("task_type", "N/A")
+    flat_config["ordinal_method"] = config.get("ordinal", {}).get("method", "N/A")
+    tuning_info = config.get("_tuning", {})
+    flat_config["tuning_stage"] = tuning_info.get("stage", "N/A")
+    flat_config["tuning_tag"] = tuning_info.get("tag", "N/A")
     flat_config["loss_function"] = config.get("loss_function", "N/A")
 
     for key, value in config.get("params", {}).items():
@@ -24,7 +29,7 @@ def flatten_config(config):
         else:
             flat_config[key] = value
 
-    for section in ("early_stopping", "gradient_accumulation", "lr_scheduler", "class_balanced_loss"):
+    for section in ("early_stopping", "gradient_accumulation", "lr_scheduler", "class_balanced_loss", "lora"):
         for key, value in config.get(section, {}).items():
             flat_config[f"{section}_{key}"] = value
 

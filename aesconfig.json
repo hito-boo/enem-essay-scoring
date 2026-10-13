@@ -15,12 +15,18 @@
         "c5": "linear"
     },
 
+    "profiling": true,
+
     "optimizer": "adamw",
+
     "task_type": "ordinal",
+    "ordinal": {
+        "method": "extended_binary"
+    },
 
     "params": {
         "seed": 21,
-        "learning_rate": 2e-5,
+        "learning_rate": 5e-5,
         "weight_decay": 0.01,
         "epochs": 10,
         "drop_out": [0.1, 0.0, 0.0, 0.0, 0.0, 0.0],
@@ -28,9 +34,20 @@
         "batch_size": 8
     },
 
+    "lr_scheduler": {
+        "enabled": false,
+        "type": "linear_warmup",
+        "warmup_ratio": 0.1
+    },
+
+    "gradient_accumulation": {
+        "enabled": true,
+        "steps": 4
+    },
+
     "class_balanced_loss": {
         "enabled": true,
-        "power": 0.7
+        "power": 1.0
     },
 
     "early_stopping": {
@@ -42,20 +59,24 @@
         "restore_best_weights": true
     },
 
-    "gradient_accumulation": {
-        "enabled": true,
-        "steps": 2
+    "lora": {
+        "enabled": false,
+        "r": 8,
+        "alpha": 16,
+        "dropout": 0.1,
+        "target_modules": ["query", "value"]
     },
 
-    "lr_scheduler": {
-        "enabled": true,
-        "type": "linear_warmup",
-        "warmup_ratio": 0.1
+    "gradient_clipping": {
+        "enabled": false,
+        "max_norm": 1.0
+    },
+
+    "quantization": {
+        "checkpoint_path": "checkpoints/bertimbau-baseline.pt"
     },
 
     "training_evaluation": {
         "output_dir": "results/training_history"
-    },
-
-    "profiling": true
+    }
 }

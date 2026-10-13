@@ -29,7 +29,7 @@ scheduler, scheduler_step_mode = build_scheduler(optimizer, num_training_steps)
 
 # Train Model (from engine.py; loss functions built internally, check 'scoring/losses.py')
 print("[Main] Starting training of the Model...")
-history, hardware_metrics = run_training(
+history, hardware_metrics, best_val_metrics = run_training(
     model,
     dataloaders["train"],
     dataloaders["validation"],
@@ -56,7 +56,7 @@ final_results = run_testing(
 )
 
 # Save results (check 'results' module)
-save_to_csv(CONFIG, final_results, hardware_metrics)
-log_to_mlflow(CONFIG, final_results, hardware_metrics)
+save_to_csv(CONFIG, {**final_results, **best_val_metrics}, hardware_metrics)
+log_to_mlflow(CONFIG, {**final_results, **best_val_metrics}, hardware_metrics)
 
 # python -m scoring.main
