@@ -4,6 +4,7 @@
 ![PyTorch](https://img.shields.io/badge/PyTorch-2.5.1-EE4C2C?logo=pytorch&logoColor=white)
 ![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Transformers-4.46-FFD21E)
 ![MLflow](https://img.shields.io/badge/MLflow-tracking-0194E2?logo=mlflow&logoColor=white)
+![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
 
 Sistema de **Avaliação Automática de Redações (AES, *Automatic Essay Scoring*)** para o **Exame Nacional do Ensino Médio (Enem)**. Um único codificador, como o **BERTimbau Base**, é compartilhado por **cinco cabeças de predição**, uma para cada competência do exame, e estima as cinco notas (0 a 200, em passos de 40) em **uma só passagem direta**, seguindo o paradigma de Aprendizado Multi-Tarefa (MTL).
 
@@ -77,21 +78,39 @@ A correção manual de redações em larga escala é cara, lenta e sujeita à su
 
 ### Arquitetura
 
-```mermaid
-flowchart TD
-    A["Redação (texto bruto)"] --> B["Tokenizador BERTimbau<br/>input_ids + attention_mask (B × 512)"]
-    B --> C["Encoder BERTimbau Base compartilhado<br/>12 camadas · d = 768"]
-    C --> D["Representação global [CLS]/pooler (B × 768)<br/>+ Dropout"]
-    D --> H1["Cabeça C1<br/>Norma padrão"]
-    D --> H2["Cabeça C2<br/>Tema e repertório"]
-    D --> H3["Cabeça C3<br/>Argumentação"]
-    D --> H4["Cabeça C4<br/>Coesão"]
-    D --> H5["Cabeça C5<br/>Proposta de intervenção"]
-    H1 --> L["Perda global = Σ wc · Lc"]
-    H2 --> L
-    H3 --> L
-    H4 --> L
-    H5 --> L
+```text
+                          Redação (texto bruto)
+                                     │
+                                     ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                         Tokenizador BERTimbau                          │
+│                  input_ids + attention_mask (B × 512)                  │
+└────────────────────────────────────────────────────────────────────────┘
+                                     │
+                                     ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                 Encoder BERTimbau Base (compartilhado)                 │
+│                       12 camadas · d_model = 768                       │
+└────────────────────────────────────────────────────────────────────────┘
+                                     │
+                                     ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                  Representação global [CLS] / pooler                   │
+│                          (B × 768) + Dropout                           │
+└────────────────────────────────────────────────────────────────────────┘
+                                     │
+       ┌──────────────┬──────────────┼──────────────┬──────────────┐
+       ▼              ▼              ▼              ▼              ▼
+┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐
+│ Cabeça C1  │ │ Cabeça C2  │ │ Cabeça C3  │ │ Cabeça C4  │ │ Cabeça C5  │
+│   Norma    │ │   Tema e   │ │Argumentação│ │   Coesão   │ │Proposta de │
+│   padrão   │ │ repertório │ │            │ │            │ │intervenção │
+└────────────┘ └────────────┘ └────────────┘ └────────────┘ └────────────┘
+       │              │              │              │              │
+       └──────────────┴──────────────┬──────────────┴──────────────┘
+                                     │
+                                     ▼
+                   Perda global = Σ wc · Lc   (c = 1…5)
 ```
 
 Cada cabeça pode ser **linear** (`Linear(768 → d_out)`) ou **multicamadas** (`768 → 256 → ReLU → d_out`). A dimensão de saída `d_out` depende da formulação da tarefa.
@@ -121,6 +140,7 @@ Cada cabeça pode ser **linear** (`Linear(768 → d_out)`) ou **multicamadas** (
 
 ```text
 enem-essay-scoring/
+├── LICENSE                         # Licença MIT
 ├── aesconfig.json                  # Configuração central de todos os experimentos
 ├── config.py                       # Carrega o JSON, define DEVICE e set_seed()
 ├── task_strategy.py                # Alvos e decodificação por tipo de tarefa
