@@ -82,8 +82,8 @@ if ACTIVE_TASK_TYPE == "ordinal" and ACTIVE_ORDINAL_METHOD == "corn":
 
 if __name__ == "__main__":
     run_stage(
-        stage_name="stage1_bertimbau_baseline_ordinal_multihead_test", # f"stage1_bertimbau_baseline_{_stage_suffix}",
-        baseline=baseline_with_multi_heads(ACTIVE_TASK_TYPE, ACTIVE_ORDINAL_METHOD), # baseline_for
-        search_space=[], # SEARCH_SPACE_ROUNDS[ACTIVE_ROUND],
+        stage_name=f"stage1_bertimbau_baseline_{_stage_suffix}",
+        baseline=baseline_for(ACTIVE_TASK_TYPE, ACTIVE_ORDINAL_METHOD),
+        search_space=SEARCH_SPACE_ROUNDS[ACTIVE_ROUND],
         seeds=[21, 42, 7],
     )
